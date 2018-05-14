@@ -147,7 +147,7 @@ int main(int argc, char * argv[]) {
 
     int wjs_frames_per_pixel = 256;
     int wjs_width = 800;
-    int wjs_precision = 4;
+
     int wjs_plain = 0;
     int wjs_calculate_width = 0;
 
@@ -204,8 +204,6 @@ int main(int argc, char * argv[]) {
                 wjs_calculate_width = 1;
             } else if (strcmp(arg, "wjs-width") == 0) {
                 wjs_width = atoi(argv[++i]);
-            } else if (strcmp(arg, "wjs-precision") == 0) {
-                wjs_precision = atoi(argv[++i]);
             } else {
                 fprintf(stderr, "Unrecognized argument: %s\n", arg);
                 return usage(exe);
@@ -396,8 +394,9 @@ int main(int argc, char * argv[]) {
     }
 
     FILE *waveformjs_f = NULL;
-    int wjs_frames_per_pixel = 0;
-    int16_t wjs_max_sample;
+    int16_t wjs_left_sample;
+    int16_t wjs_right_sample;
+
     int wjs_frames_until_emit = 0;
     int wjs_emit_count;
     if (waveformjs_output) {
@@ -412,7 +411,7 @@ int main(int argc, char * argv[]) {
         }
 
         if (wjs_calculate_width) {
-            wjs_width = frame_count / wjs_frames_per_pixel;
+            wjs_width = (frame_count / wjs_frames_per_pixel)-1;
         } else {
             wjs_frames_per_pixel = frame_count / wjs_width;
             if (wjs_frames_per_pixel < 1)
@@ -426,7 +425,9 @@ int main(int argc, char * argv[]) {
 
         fprintf(waveformjs_f, "[");
 
-        wjs_max_sample = INT16_MIN;
+        wjs_left_sample = INT16_MIN;
+        wjs_right_sample = INT16_MIN;
+
         wjs_frames_until_emit = wjs_frames_per_pixel;
         wjs_emit_count = 0;
     }
@@ -458,18 +459,17 @@ int main(int argc, char * argv[]) {
                 if (wjs_frames_until_emit == 0) {
                     wjs_emit_count += 1;
                     char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
-                    double float_sample = wjs_max_sample / (double) INT16_MAX;
-                    fprintf(waveformjs_f, "%.*f%s", wjs_precision, float_sample, comma);
-                    wjs_max_sample = INT16_MIN;
+                    fprintf(waveformjs_f, "%d,", (wjs_left_sample/128)*-1);
+                    fprintf(waveformjs_f, "%d%s", wjs_right_sample/128, comma);
+                    wjs_left_sample = INT16_MIN;
+                    wjs_right_sample = INT16_MIN;
                     wjs_frames_until_emit = wjs_frames_per_pixel;
                 }
                 int16_t *data = (int16_t *) buffer->data[0];
                 int16_t *left = &data[i];
                 int16_t *right = &data[i + 1];
-                int16_t abs_left = int16_abs(*left);
-                int16_t abs_right = int16_abs(*right);
-                if (abs_left > wjs_max_sample) wjs_max_sample = abs_left;
-                if (abs_right > wjs_max_sample) wjs_max_sample = abs_right;
+                wjs_left_sample = int16_abs(*left);
+                wjs_right_sample = int16_abs(*right);
             }
         }
 
@@ -491,8 +491,8 @@ int main(int argc, char * argv[]) {
     if (waveformjs_output) {
         if (wjs_emit_count < wjs_width) {
             // emit the last sample
-            double float_sample = wjs_max_sample / (double) INT16_MAX;
-            fprintf(waveformjs_f, "%.*f", wjs_precision, float_sample);
+            fprintf(waveformjs_f, "%d,", (wjs_left_sample/128)*-1);
+            fprintf(waveformjs_f, "%d", wjs_right_sample/128);
         }
 
         fprintf(waveformjs_f, "]");
