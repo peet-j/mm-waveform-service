@@ -56,6 +56,7 @@ Transcoding Options:\n\
 \n\
 WaveformJs Options:\n\
 --wjs-width 800              width in samples\n\
+--wjs-frames-per-pixel 256   number of frames per pixel/sample\n\
 --wjs-precision 4            how many digits of precision\n\
 --wjs-plain                  exclude metadata in output JSON (default off)\n\
 \n\
@@ -144,9 +145,11 @@ int main(int argc, char * argv[]) {
     char *tag_year = NULL;
     char *tag_comment = NULL;
 
+    int wjs_frames_per_pixel = 256;
     int wjs_width = 800;
     int wjs_precision = 4;
     int wjs_plain = 0;
+    int wjs_calculate_width = 0;
 
     int scan = 0;
 
@@ -196,6 +199,9 @@ int main(int argc, char * argv[]) {
                 tag_year = argv[++i];
             } else if (strcmp(arg, "tag-comment") == 0) {
                 tag_comment = argv[++i];
+            } else if (strcmp(arg, "wjs-frames-per-pixel") == 0) {
+                wjs_frames_per_pixel = atoi(argv[++i]);
+                wjs_calculate_width = 1;
             } else if (strcmp(arg, "wjs-width") == 0) {
                 wjs_width = atoi(argv[++i]);
             } else if (strcmp(arg, "wjs-precision") == 0) {
@@ -405,13 +411,17 @@ int main(int argc, char * argv[]) {
             }
         }
 
-        wjs_frames_per_pixel = frame_count / wjs_width;
-        if (wjs_frames_per_pixel < 1)
-            wjs_frames_per_pixel = 1;
+        if (wjs_calculate_width) {
+            wjs_width = frame_count / wjs_frames_per_pixel;
+        } else {
+            wjs_frames_per_pixel = frame_count / wjs_width;
+            if (wjs_frames_per_pixel < 1)
+                wjs_frames_per_pixel = 1;
+        }
 
         if (!wjs_plain) {
-            fprintf(waveformjs_f, "{\"frameCount\":%d,\"frameRate\":%d, \"waveformjs\":",
-                    frame_count, 44100);
+            fprintf(waveformjs_f, "{\"total_frames\":%d,\"sample_rate\":%d, \"samples_per_pixel\":%d, \"length\":%d, \"data\":",
+                    frame_count, 44100, wjs_frames_per_pixel, wjs_width);
         }
 
         fprintf(waveformjs_f, "[");
@@ -439,6 +449,7 @@ int main(int argc, char * argv[]) {
                 if (avg < png_min_sample) png_min_sample = avg;
             }
         }
+
         if (waveformjs_output) {
             int i;
             for (i = 0; i < buffer->frame_count && wjs_emit_count < wjs_width;
