@@ -2,13 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <groove/groove.h>
-#include <groove/encoder.h>
 #include <pthread.h>
 #include <limits.h>
-
-// transcoding stuff
-static FILE *transcode_out_f = NULL;
-static struct GrooveEncoder *encoder = NULL;
 
 static int version() {
     printf("2.0.0\n");
@@ -20,21 +15,11 @@ static int usage(const char *exe) {
 \n\
 Usage:\n\
 \n\
-waveform [options] in [--transcode out] [--waveformjs out]\n\
+waveform [options] in [--waveformjs out]\n\
 (where `in` is a file path and `out` is a file path or `-` for STDOUT)\n\
 \n\
 Options:\n\
 --scan                       duration scan (default off)\n\
-\n\
-Transcoding Options:\n\
---bitrate 320                audio bitrate in kbps\n\
---format name                e.g. mp3, ogg, mp4\n\
---codec name                 e.g. mp3, vorbis, flac, aac\n\
---mime mimetype              e.g. audio/vorbis\n\
---tag-artist artistname      artist tag\n\
---tag-title title            title tag\n\
---tag-year 2000              year tag\n\
---tag-comment comment        comment tag\n\
 \n\
 WaveformJs Options:\n\
 --wjs-width 800              width in samples\n\
@@ -44,16 +29,6 @@ WaveformJs Options:\n\
 \n");
 
     return 1;
-}
-
-static void *encode_write_thread(void *arg) {
-    struct GrooveBuffer *buffer;
-
-    while (groove_encoder_buffer_get(encoder, &buffer, 1) == GROOVE_BUFFER_YES) {
-        fwrite(buffer->data[0], 1, buffer->size, transcode_out_f);
-        groove_buffer_unref(buffer);
-    }
-    return NULL;
 }
 
 static int16_t int16_abs(int16_t x) {
@@ -70,20 +45,12 @@ int main(int argc, char * argv[]) {
     char *exe = argv[0];
 
     char *input_filename = NULL;
-    char *transcode_output = NULL;
     char *waveformjs_output = NULL;
 
-    int bit_rate_k = 320;
-    char *format = NULL;
-    char *codec = NULL;
-    char *mime = NULL;
-    char *tag_artist = NULL;
-    char *tag_title = NULL;
-    char *tag_year = NULL;
-    char *tag_comment = NULL;
-
     int wjs_frames_per_pixel = 256;
-    int wjs_width = 800;
+    int wjs_width = 2000;
+
+    int wjs_plain = 0;
     int wjs_calculate_width = 0;
 
     int scan = 0;
@@ -95,31 +62,15 @@ int main(int argc, char * argv[]) {
             arg += 2;
             if (strcmp(arg, "scan") == 0) {
                 scan = 1;
+            } else if (strcmp(arg, "wjs-plain") == 0) {
+                wjs_plain = 1;
             } else if (strcmp(arg, "version") == 0) {
                 return version();
             } else if (i + 1 >= argc) {
                 // args that take 1 parameter
                 return usage(exe);
-            } else if (strcmp(arg, "bitrate") == 0) {
-                bit_rate_k = atoi(argv[++i]);
-            } else if (strcmp(arg, "format") == 0) {
-                format = argv[++i];
-            } else if (strcmp(arg, "codec") == 0) {
-                codec = argv[++i];
-            } else if (strcmp(arg, "mime") == 0) {
-                mime = argv[++i];
-            } else if (strcmp(arg, "transcode") == 0) {
-                transcode_output = argv[++i];
             } else if (strcmp(arg, "waveformjs") == 0) {
                 waveformjs_output = argv[++i];
-            } else if (strcmp(arg, "tag-artist") == 0) {
-                tag_artist = argv[++i];
-            } else if (strcmp(arg, "tag-title") == 0) {
-                tag_title = argv[++i];
-            } else if (strcmp(arg, "tag-year") == 0) {
-                tag_year = argv[++i];
-            } else if (strcmp(arg, "tag-comment") == 0) {
-                tag_comment = argv[++i];
             } else if (strcmp(arg, "wjs-frames-per-pixel") == 0) {
                 wjs_frames_per_pixel = atoi(argv[++i]);
                 wjs_calculate_width = 1;
@@ -142,7 +93,7 @@ int main(int argc, char * argv[]) {
         return usage(exe);
     }
 
-    if (!transcode_output && !waveformjs_output) {
+    if (!waveformjs_output) {
         fprintf(stderr, "at least one output required\n");
         return usage(exe);
     }
@@ -189,8 +140,6 @@ int main(int argc, char * argv[]) {
         frame_count = double_ceil(duration * 44100.0);
     }
 
-    pthread_t thread_id;
-
     // insert the item *after* creating the sinks to avoid race conditions
     groove_playlist_insert(playlist, file, 1.0, 1.0, NULL);
 
@@ -220,8 +169,12 @@ int main(int argc, char * argv[]) {
                 wjs_frames_per_pixel = 1;
         }
 
-        fprintf(waveformjs_f, "{\"total_frames\":%d,\"sample_rate\":%d, \"samples_per_pixel\":%d, \"length\":%d, \"data\":[",
+        if (!wjs_plain) {
+            fprintf(waveformjs_f, "{\"total_frames\":%d,\"sample_rate\":%d, \"samples_per_pixel\":%d, \"length\":%d, \"data\":",
                     frame_count, 44100, wjs_frames_per_pixel, wjs_width);
+        }
+
+        fprintf(waveformjs_f, "[");
 
         wjs_left_sample = INT16_MIN;
         wjs_right_sample = INT16_MIN;
@@ -232,40 +185,44 @@ int main(int argc, char * argv[]) {
 
     while (groove_sink_buffer_get(sink, &buffer, 1) == GROOVE_BUFFER_YES) {
 
-        int n = sizeof(buffer->data) / sizeof(int16_t);
-        printf("Number of data points: %d\n", n);
-        printf("frame_count: %d\n", buffer->frame_count);
-
-        int idx;
-        for (idx = 0; i < buffer->frame_count && wjs_emit_count < wjs_width; idx += 1, wjs_frames_until_emit -= 1)
-        {
-            // write next sample
-            if (wjs_frames_until_emit == 0) {
-                wjs_emit_count += 1;
-                char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
-                fprintf(waveformjs_f, "%d,", (wjs_left_sample/wjs_frames_per_pixel)*-1);
-                fprintf(waveformjs_f, "%d%s", wjs_right_sample/wjs_frames_per_pixel, comma);
-                wjs_left_sample = INT16_MIN;
-                wjs_right_sample = INT16_MIN;
-                wjs_frames_until_emit = wjs_frames_per_pixel;
+        if (waveformjs_output) {
+            int i;
+            for (i = 0; i < buffer->frame_count && wjs_emit_count < wjs_width;
+                    i += 1, wjs_frames_until_emit -= 1)
+            {
+                if (wjs_frames_until_emit == 0) {
+                    wjs_emit_count += 1;
+                    char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
+                    fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
+                    fprintf(waveformjs_f, "%d%s", wjs_right_sample/256, comma);
+                    wjs_left_sample = INT16_MIN;
+                    wjs_right_sample = INT16_MIN;
+                    wjs_frames_until_emit = wjs_frames_per_pixel;
+                }
+                int16_t *data = (int16_t *) buffer->data[0];
+                int16_t *left = &data[i];
+                int16_t *right = &data[i + 1];
+                wjs_left_sample = int16_abs(*left);
+                wjs_right_sample = int16_abs(*right);
             }
-            // get next samples
-            int16_t *data = (int16_t *) buffer->data[0];
-            int16_t *left = &data[idx];
-            int16_t *right = &data[idx + 1];
-            wjs_left_sample = int16_abs(*left);
-            wjs_right_sample = int16_abs(*right);
         }
+
         groove_buffer_unref(buffer);
     }
 
-    if (wjs_emit_count < wjs_width) {
-        // write the last sample
-        fprintf(waveformjs_f, "%d,", (wjs_left_sample/wjs_frames_per_pixel)*-1);
-        fprintf(waveformjs_f, "%d", wjs_right_sample/wjs_frames_per_pixel);
+    if (waveformjs_output) {
+        if (wjs_emit_count < wjs_width) {
+            // emit the last sample
+            fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
+            fprintf(waveformjs_f, "%d", wjs_right_sample/256);
+        }
+        fprintf(waveformjs_f, "]");
+
+        if (!wjs_plain)
+            fprintf(waveformjs_f, "}");
+
+        fclose(waveformjs_f);
     }
-    fprintf(waveformjs_f, "]}");
-    fclose(waveformjs_f);
 
     groove_sink_detach(sink);
     groove_sink_destroy(sink);
