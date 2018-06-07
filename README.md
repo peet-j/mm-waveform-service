@@ -30,7 +30,7 @@ Output: any or all of these:
 
     WaveformJs Options:
     --wjs-width 800              width in samples
-    --wjs-precision 4            how many digits of precision
+    --wjs-frames-per-pixel 256   number of frames per pixel/sample (overrides wjs-width)
     --wjs-plain                  exclude metadata in output JSON (default off)
 
     PNG Options:
@@ -54,3 +54,7 @@ Output: any or all of these:
  * [Node.js module](https://github.com/andrewrk/node-waveform)
  * [PHP Wrapper Script](https://github.com/polem/WaveformGenerator)
  * [Native Interface for Go](https://github.com/dz0ny/podcaster/blob/master/utils/waveform.go)
+
+## Docker
+
+See https://hub.docker.com/r/jpeet/waveform/
