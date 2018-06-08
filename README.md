@@ -19,6 +19,8 @@ Output: Waveform Json compatible with: [BBC Peaks.js](https://github.com/bbc/pea
     --frames-per-pixel 256   number of frames per pixel/sample
     --plain                  exclude metadata in output JSON (default off)
 
+e.g. ./waveform ./audio/d3f14888-5070-4176-8b4e-e4fcaba5c135.mp4 --output -
+
 ## Installation
 
 1. Install [libgroove](https://github.com/andrewrk/libgroove) dev package.
@@ -37,5 +39,11 @@ Output: Waveform Json compatible with: [BBC Peaks.js](https://github.com/bbc/pea
  * [Native Interface for Go](https://github.com/dz0ny/podcaster/blob/master/utils/waveform.go)
 
 ## Docker
+
+Build image: 
+`docker build -t <tag> .`
+
+Running waveform directly:
+`docker run -v `pwd`/audio:/waveform/audio -w /waveform -it thisisglobal/waveform:latest ./waveform ./audio/d3f14888-5070-4176-8b4e-e4fcaba5c135.mp4 --output -`
 
 See https://hub.docker.com/r/jpeet/waveform/
