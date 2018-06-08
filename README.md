@@ -4,41 +4,20 @@
 
 Input: any format audio or video file
 
-Output: any or all of these:
-
- * transcoded audio file
- * waveform.js-compatible JSON representation of the audio file
- * PNG rendering of the waveform
+Output: Waveform Json compatible with: https://github.com/bbc/peaks.js
 
 ## Usage
 
-    waveform [options] in [--transcode out] [--waveformjs out] [--png out]
-    (where `in` is a file path and `out` is a file path or `-` for STDOUT)
+    waveform [options] <input_file> --output <destination>
+    (where `input_file` is a file path and `destination` is a file path or `-` for STDOUT)
 
     Options:
     --scan                       duration scan (default off)
 
-    Transcoding Options:
-    --bitrate 320                audio bitrate in kbps
-    --format name                e.g. mp3, ogg, mp4
-    --codec name                 e.g. mp3, vorbis, flac, aac
-    --mime mimetype              e.g. audio/vorbis
-    --tag-artist artistname      artist tag
-    --tag-title title            title tag
-    --tag-year 2000              year tag
-    --tag-comment comment        comment tag
-
     WaveformJs Options:
-    --wjs-width 800              width in samples
-    --wjs-frames-per-pixel 256   number of frames per pixel/sample (overrides wjs-width)
-    --wjs-plain                  exclude metadata in output JSON (default off)
-
-    PNG Options:
-    --png-width 256              width of the image
-    --png-height 64              height of the image
-    --png-color-bg 00000000      bg color, rrggbbaa
-    --png-color-center 000000ff  gradient center color, rrggbbaa
-    --png-color-outer 000000ff   gradient outer color, rrggbbaa
+    --width 2000              width in samples
+    --frames-per-pixel 256   number of frames per pixel/sample
+    --plain                  exclude metadata in output JSON (default off)
 
 ## Installation
 
