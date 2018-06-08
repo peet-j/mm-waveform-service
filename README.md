@@ -4,7 +4,7 @@
 
 Input: any format audio or video file
 
-Output: Waveform Json compatible with: [BBC Peaks.js] (https://github.com/bbc/peaks.js)
+Output: Waveform Json compatible with: [BBC Peaks.js](https://github.com/bbc/peaks.js)
 
 ## Usage
 
@@ -30,8 +30,8 @@ Output: Waveform Json compatible with: [BBC Peaks.js] (https://github.com/bbc/pe
 
 ## Related Projects
 
- * [Forked from andrewrk/waveform] (https://github.com/andrewrk/waveform)
- * [BBC Peaks.js] (https://github.com/bbc/peaks.js)
+ * [Forked from andrewrk/waveform](https://github.com/andrewrk/waveform)
+ * [BBC Peaks.js](https://github.com/bbc/peaks.js)
  * [Node.js module](https://github.com/andrewrk/node-waveform)
  * [PHP Wrapper Script](https://github.com/polem/WaveformGenerator)
  * [Native Interface for Go](https://github.com/dz0ny/podcaster/blob/master/utils/waveform.go)
