@@ -41,9 +41,11 @@ e.g. ./waveform ./audio/d3f14888-5070-4176-8b4e-e4fcaba5c135.mp4 --output -
 ## Docker
 
 Build image: 
+
 `docker build -t <tag> .`
 
 Running waveform directly:
+
 `docker run -v `pwd`/audio:/waveform/audio -w /waveform -it thisisglobal/waveform:latest ./waveform ./audio/d3f14888-5070-4176-8b4e-e4fcaba5c135.mp4 --output -`
 
 See https://hub.docker.com/r/jpeet/waveform/
