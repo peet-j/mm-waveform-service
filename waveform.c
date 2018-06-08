@@ -6,7 +6,7 @@
 #include <limits.h>
 
 static int version() {
-    printf("2.0.0\n");
+    printf("1.0.0\n");
     return 0;
 }
 
@@ -15,17 +15,16 @@ static int usage(const char *exe) {
 \n\
 Usage:\n\
 \n\
-waveform [options] in [--waveformjs out]\n\
-(where `in` is a file path and `out` is a file path or `-` for STDOUT)\n\
+waveform [options] <input_file> --output <destination>\n\
+(where `input_file` is a file path and `destination` is a file path or `-` for STDOUT)\n\
 \n\
 Options:\n\
 --scan                       duration scan (default off)\n\
 \n\
 WaveformJs Options:\n\
---wjs-width 800              width in samples\n\
---wjs-frames-per-pixel 256   number of frames per pixel/sample\n\
---wjs-precision 4            how many digits of precision\n\
---wjs-plain                  exclude metadata in output JSON (default off)\n\
+--width 2000              width in samples\n\
+--frames-per-pixel 256   number of frames per pixel/sample\n\
+--plain                  exclude metadata in output JSON (default off)\n\
 \n");
 
     return 1;
@@ -60,22 +59,22 @@ int main(int argc, char * argv[]) {
         char *arg = argv[i];
         if (arg[0] == '-' && arg[1] == '-') {
             arg += 2;
-            if (strcmp(arg, "scan") == 0) {
+            if (strcmp(arg, "output") == 0) {
+                waveformjs_output = argv[++i];
+            } else if (strcmp(arg, "scan") == 0) {
                 scan = 1;
-            } else if (strcmp(arg, "wjs-plain") == 0) {
+            } else if (strcmp(arg, "plain") == 0) {
                 wjs_plain = 1;
+            } else if (strcmp(arg, "frames-per-pixel") == 0) {
+                wjs_frames_per_pixel = atoi(argv[++i]);
+                wjs_calculate_width = 1;
+            } else if (strcmp(arg, "width") == 0) {
+                wjs_width = atoi(argv[++i]);
             } else if (strcmp(arg, "version") == 0) {
                 return version();
             } else if (i + 1 >= argc) {
                 // args that take 1 parameter
                 return usage(exe);
-            } else if (strcmp(arg, "waveformjs") == 0) {
-                waveformjs_output = argv[++i];
-            } else if (strcmp(arg, "wjs-frames-per-pixel") == 0) {
-                wjs_frames_per_pixel = atoi(argv[++i]);
-                wjs_calculate_width = 1;
-            } else if (strcmp(arg, "wjs-width") == 0) {
-                wjs_width = atoi(argv[++i]);
             } else {
                 fprintf(stderr, "Unrecognized argument: %s\n", arg);
                 return usage(exe);
@@ -99,7 +98,6 @@ int main(int argc, char * argv[]) {
     }
 
     // arg parsing done. let's begin.
-
     groove_init();
     atexit(groove_finish);
 
@@ -150,79 +148,73 @@ int main(int argc, char * argv[]) {
     int wjs_frames_until_emit = 0;
     int wjs_emit_count;
 
-    if (waveformjs_output) {
-        if (strcmp(waveformjs_output, "-") == 0) {
-            waveformjs_f = stdout;
-        } else {
-            waveformjs_f = fopen(waveformjs_output, "wb");
-            if (!waveformjs_f) {
-                fprintf(stderr, "Error opening output file: %s\n", waveformjs_output);
-                return 1;
-            }
+    if (strcmp(waveformjs_output, "-") == 0) {
+        waveformjs_f = stdout;
+    } else {
+        waveformjs_f = fopen(waveformjs_output, "wb");
+        if (!waveformjs_f) {
+            fprintf(stderr, "Error opening output file: %s\n", waveformjs_output);
+            return 1;
         }
-
-        if (wjs_calculate_width) {
-            wjs_width = (frame_count / wjs_frames_per_pixel)-1;
-        } else {
-            wjs_frames_per_pixel = frame_count / wjs_width;
-            if (wjs_frames_per_pixel < 1)
-                wjs_frames_per_pixel = 1;
-        }
-
-        if (!wjs_plain) {
-            fprintf(waveformjs_f, "{\"total_frames\":%d,\"sample_rate\":%d, \"samples_per_pixel\":%d, \"length\":%d, \"data\":",
-                    frame_count, 44100, wjs_frames_per_pixel, wjs_width);
-        }
-
-        fprintf(waveformjs_f, "[");
-
-        wjs_left_sample = INT16_MIN;
-        wjs_right_sample = INT16_MIN;
-
-        wjs_frames_until_emit = wjs_frames_per_pixel;
-        wjs_emit_count = 0;
     }
+
+    if (wjs_calculate_width) {
+        wjs_width = (frame_count / wjs_frames_per_pixel)-1;
+    } else {
+        wjs_frames_per_pixel = frame_count / wjs_width;
+        if (wjs_frames_per_pixel < 1)
+            wjs_frames_per_pixel = 1;
+    }
+
+    if (!wjs_plain) {
+        fprintf(waveformjs_f, "{\"total_frames\":%d,\"sample_rate\":%d, \"samples_per_pixel\":%d, \"length\":%d, \"data\":",
+                frame_count, 44100, wjs_frames_per_pixel, wjs_width);
+    }
+
+    fprintf(waveformjs_f, "[");
+
+    wjs_left_sample = INT16_MIN;
+    wjs_right_sample = INT16_MIN;
+
+    wjs_frames_until_emit = wjs_frames_per_pixel;
+    wjs_emit_count = 0;
 
     while (groove_sink_buffer_get(sink, &buffer, 1) == GROOVE_BUFFER_YES) {
 
-        if (waveformjs_output) {
-            int i;
-            for (i = 0; i < buffer->frame_count && wjs_emit_count < wjs_width;
-                    i += 1, wjs_frames_until_emit -= 1)
-            {
-                if (wjs_frames_until_emit == 0) {
-                    wjs_emit_count += 1;
-                    char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
-                    fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
-                    fprintf(waveformjs_f, "%d%s", wjs_right_sample/256, comma);
-                    wjs_left_sample = INT16_MIN;
-                    wjs_right_sample = INT16_MIN;
-                    wjs_frames_until_emit = wjs_frames_per_pixel;
-                }
-                int16_t *data = (int16_t *) buffer->data[0];
-                int16_t *left = &data[i];
-                int16_t *right = &data[i + 1];
-                wjs_left_sample = int16_abs(*left);
-                wjs_right_sample = int16_abs(*right);
+        int i;
+        for (i = 0; i < buffer->frame_count && wjs_emit_count < wjs_width;
+                i += 1, wjs_frames_until_emit -= 1)
+        {
+            if (wjs_frames_until_emit == 0) {
+                wjs_emit_count += 1;
+                char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
+                fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
+                fprintf(waveformjs_f, "%d%s", wjs_right_sample/256, comma);
+                wjs_left_sample = INT16_MIN;
+                wjs_right_sample = INT16_MIN;
+                wjs_frames_until_emit = wjs_frames_per_pixel;
             }
+            int16_t *data = (int16_t *) buffer->data[0];
+            int16_t *left = &data[i];
+            int16_t *right = &data[i + 1];
+            wjs_left_sample = int16_abs(*left);
+            wjs_right_sample = int16_abs(*right);
         }
-
         groove_buffer_unref(buffer);
     }
 
-    if (waveformjs_output) {
-        if (wjs_emit_count < wjs_width) {
-            // emit the last sample
-            fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
-            fprintf(waveformjs_f, "%d", wjs_right_sample/256);
-        }
-        fprintf(waveformjs_f, "]");
-
-        if (!wjs_plain)
-            fprintf(waveformjs_f, "}");
-
-        fclose(waveformjs_f);
+    if (wjs_emit_count < wjs_width) {
+        // emit the last sample
+        fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
+        fprintf(waveformjs_f, "%d", wjs_right_sample/256);
     }
+
+    fprintf(waveformjs_f, "]");
+
+    if (!wjs_plain)
+        fprintf(waveformjs_f, "}");
+
+    fclose(waveformjs_f);
 
     groove_sink_detach(sink);
     groove_sink_destroy(sink);
