@@ -166,6 +166,7 @@ int main(int argc, char * argv[]) {
     if (wjs_calculate_width) {
         if (wjs_pixels_per_second>0){
             wjs_width = duration * wjs_pixels_per_second;
+            wjs_frames_per_pixel = 44100 / wjs_pixels_per_second;
         } else {
             wjs_width = (frame_count / wjs_frames_per_pixel)-1;
         }
