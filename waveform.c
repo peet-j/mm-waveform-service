@@ -24,6 +24,7 @@ Options:\n\
 WaveformJs Options:\n\
 --width 2000              width in samples\n\
 --frames-per-pixel 256   number of frames per pixel/sample\n\
+--pixels-per-second 10   number of pixels per second of audio\n\
 --plain                  exclude metadata in output JSON (default off)\n\
 \n");
 
@@ -46,6 +47,7 @@ int main(int argc, char * argv[]) {
     char *input_filename = NULL;
     char *waveformjs_output = NULL;
 
+    int wjs_pixels_per_second = 0;
     int wjs_frames_per_pixel = 256;
     int wjs_width = 2000;
 
@@ -67,6 +69,9 @@ int main(int argc, char * argv[]) {
                 wjs_plain = 1;
             } else if (strcmp(arg, "frames-per-pixel") == 0) {
                 wjs_frames_per_pixel = atoi(argv[++i]);
+                wjs_calculate_width = 1;
+            } else if (strcmp(arg, "pixels-per-second") == 0) {
+                wjs_pixels_per_second = atoi(argv[++i]);
                 wjs_calculate_width = 1;
             } else if (strcmp(arg, "width") == 0) {
                 wjs_width = atoi(argv[++i]);
@@ -159,7 +164,11 @@ int main(int argc, char * argv[]) {
     }
 
     if (wjs_calculate_width) {
-        wjs_width = (frame_count / wjs_frames_per_pixel)-1;
+        if (wjs_pixels_per_second>0){
+            wjs_width = duration * wjs_pixels_per_second;
+        } else {
+            wjs_width = (frame_count / wjs_frames_per_pixel)-1;
+        }
     } else {
         wjs_frames_per_pixel = frame_count / wjs_width;
         if (wjs_frames_per_pixel < 1)
