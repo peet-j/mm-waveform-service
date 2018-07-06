@@ -24,7 +24,7 @@ Options:\n\
 WaveformJs Options:\n\
 --width 2000              width in samples\n\
 --frames-per-pixel 256   number of frames per pixel/sample\n\
---pixels-per-second 10   number of pixels per second of audio\n\
+--pixels-per-second      number of pixels per second of audio\n\
 --plain                  exclude metadata in output JSON (default off)\n\
 \n");
 
@@ -55,6 +55,7 @@ int main(int argc, char * argv[]) {
     int wjs_calculate_width = 0;
 
     int scan = 0;
+    static const int PROPORTION = 192;
 
     int i;
     for (i = 1; i < argc; ++i) {
@@ -198,8 +199,8 @@ int main(int argc, char * argv[]) {
             if (wjs_frames_until_emit == 0) {
                 wjs_emit_count += 1;
                 char *comma = (wjs_emit_count == wjs_width) ? "" : ",";
-                fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
-                fprintf(waveformjs_f, "%d%s", wjs_right_sample/256, comma);
+                fprintf(waveformjs_f, "%d,", (wjs_left_sample/PROPORTION)*-1);
+                fprintf(waveformjs_f, "%d%s", wjs_right_sample/PROPORTION, comma);
                 wjs_left_sample = INT16_MIN;
                 wjs_right_sample = INT16_MIN;
                 wjs_frames_until_emit = wjs_frames_per_pixel;
@@ -215,8 +216,8 @@ int main(int argc, char * argv[]) {
 
     if (wjs_emit_count < wjs_width) {
         // emit the last sample
-        fprintf(waveformjs_f, "%d,", (wjs_left_sample/256)*-1);
-        fprintf(waveformjs_f, "%d", wjs_right_sample/256);
+        fprintf(waveformjs_f, "%d,", (wjs_left_sample/PROPORTION)*-1);
+        fprintf(waveformjs_f, "%d", wjs_right_sample/PROPORTION);
     }
 
     fprintf(waveformjs_f, "]");
